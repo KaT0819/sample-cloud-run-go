@@ -1,0 +1,19 @@
+{{ template "header" . }}
+
+<p>{{ .Message }}</p>
+
+<!-- ログイン -->
+<h3 class="mt-4">ログイン</h3>
+<form action="/login" method="POST">
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" class="form-control" id="name" name="name">
+    </div>
+    <div class="form-group">
+        <label for="pass">Password</label>
+        <input type="password" class="form-control" id="pass" name="pass">
+    </div>
+    <button type="submit" class="btn btn-primary mt-4">Post</button>
+</form>
+
+{{ template "footer" . }}

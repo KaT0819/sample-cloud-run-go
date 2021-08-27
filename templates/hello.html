@@ -1,0 +1,30 @@
+{{ template "header" .}}
+
+<!-- 分岐 -->
+<h3 class="mt-4">IF文による分岐</h2>
+{{ if .Flg }}
+<p>{{ .SubMessage1 }}</p>
+{{ else }}
+<p>{{ .SubMessage2 }}</p>
+{{ end }}
+
+<!-- 分岐２（値存在） -->
+<hr class="my-4">
+<h3 class="mt-4">withによる分岐クエリパラメータにnameの値が存在するかどうか</h2>
+{{ with .Name }}
+    <!-- withの中では . でwithに指定した値を参照可能　.Nameとするとエラーになる -->
+    <p>Name is {{.}}</p>
+{{ else }}
+    <p>no Name</p>
+{{ end }}
+
+<!-- 繰り返し -->
+<hr class="my-4">
+<h3 class="mt-4">繰り返し</h2>
+<ul>
+{{ range $i, $e := .Items }}
+<li class="list-group-item">{{ $i }}: {{ $e }}</li>
+{{ end}}
+</ul>
+
+{{ template "footer" .}}
