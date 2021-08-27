@@ -19,13 +19,19 @@ WORKDIR /build
 RUN go build -a -o goapp
 
 
-# multi-stage builds
-FROM alpine:latest as production
-RUN apk --no-cache add tzdata ca-certificates
+# Now create separate deployment image
+FROM gcr.io/distroless/base
 
+# Definition of this variable is used by 'skaffold debug' to identify a golang binary.
+# Default behavior - a failure prints a stack trace for the current goroutine.
+# See https://golang.org/pkg/runtime/
+ENV GOTRACEBACK=single
+
+# Copy template & assets
+WORKDIR /hello-world
+COPY --from=builder /build/goapp /goapp
 COPY index.html index.html
 COPY assets assets/
 COPY templates templates/
 
-EXPOSE 8080
-CMD ["/goapp"]
+ENTRYPOINT ["./goapp"]
