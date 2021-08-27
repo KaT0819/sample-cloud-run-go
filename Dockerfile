@@ -1,23 +1,20 @@
 # Use base golang image from Docker Hub
-FROM golang:1.16 AS builder
+FROM golang:1.16 AS build
 
+WORKDIR /hello-world
 
-# package update
-RUN apk update &&\
-    apk add --no-cache git mercurial
-
-# app copy
-WORKDIR /build
-COPY . /build/
-
-
-# Compile
-ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64
-RUN go mod vendor
+# Install dependencies in go.mod and go.sum
+COPY go.mod go.sum ./
 RUN go mod download
-WORKDIR /build
-RUN go build -a -o goapp
 
+# Copy rest of the application source code
+COPY . ./
+
+# Compile the application to /app.
+# Skaffold passes in debug-oriented compiler flags
+ARG SKAFFOLD_GO_GCFLAGS
+RUN echo "Go gcflags: ${SKAFFOLD_GO_GCFLAGS}"
+RUN go build -gcflags="${SKAFFOLD_GO_GCFLAGS}" -mod=readonly -v -o /app
 
 # Now create separate deployment image
 FROM gcr.io/distroless/base
@@ -29,9 +26,9 @@ ENV GOTRACEBACK=single
 
 # Copy template & assets
 WORKDIR /hello-world
-COPY --from=builder /build/goapp /goapp
+COPY --from=build /app ./app
 COPY index.html index.html
 COPY assets assets/
 COPY templates templates/
 
-ENTRYPOINT ["./goapp"]
+ENTRYPOINT ["./app"]
