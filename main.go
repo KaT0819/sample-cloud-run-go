@@ -1,13 +1,23 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"hello-run/snssms"
 	"html/template"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/pinpoint"
+	"github.com/aws/aws-sdk-go/service/sns"
 	"github.com/gorilla/sessions"
+
+	"github.com/sendgrid/sendgrid-go"
+	"github.com/sendgrid/sendgrid-go/helpers/mail"
 )
 
 // templateData provides template parameters.
@@ -45,7 +55,7 @@ func setupTemp() *Temps {
 	temps.notemp = notemp()
 
 	// set index template.
-	index, err := template.ParseFiles("templates/index.html", "templates/header.html", "templates/footer.html")
+	index, err := template.ParseFiles("templates/signin.html", "templates/header.html", "templates/footer.html")
 	if err != nil {
 		index = temps.notemp
 	}
@@ -218,6 +228,21 @@ func main() {
 		port = "8080"
 	}
 
+	// Cloud Runにアクセス
+	// url := "https://toki-test-run-km6ljd432a-an.a.run.app/"
+
+	// resp, _ := http.Get(url)
+	// defer resp.Body.Close()
+
+	// byteArray, _ := ioutil.ReadAll(resp.Body)
+	// fmt.Println(string(byteArray)) // htmlをstringで取得
+
+	// AWS SNSにアクセス
+	// fsendsms()
+	// sendmessage()
+	// sendvonage()
+	// sendgridmail()
+
 	log.Print("Hello from Cloud Run! The container started successfully and is listening for HTTP requests on $PORT")
 	log.Printf("Listening on port %s", port)
 	err := http.ListenAndServe(":"+port, nil)
@@ -232,5 +257,182 @@ func helloRunHandler(w http.ResponseWriter, r *http.Request) {
 		msg := http.StatusText(http.StatusInternalServerError)
 		log.Printf("template.Execute: %v", err)
 		http.Error(w, msg, http.StatusInternalServerError)
+	}
+}
+
+func fsendsms() {
+	log.Printf("sendsms start")
+	// クライアントの生成
+	client, err := snssms.GetClient("AKIATD424O6C4MUK7V44", "RqOc9IHdILQ8OrGhxW21/WgdzXYt5+uRxapePeff", "ap-northeast-1")
+	if err != nil {
+		fmt.Errorf("Error: %v", err)
+	}
+	log.Printf("sendsms client")
+
+	// SMS送信
+	msgIn := snssms.CreateInputMessage("TestMessage", "+818074910888")
+	log.Printf("Listening on port %s", msgIn)
+
+	result, err := client.Publish(msgIn)
+	if err != nil {
+		fmt.Errorf("Error: %v", err)
+	}
+
+	fmt.Printf("Result: %s", result.String())
+}
+
+const (
+	TopicARN = "arn:aws:sns:ap-northeast-1:214536320901:email-topic"
+	// TopicARN  = "arn:aws:sns:ap-northeast-1:008023950074:test-toki"
+	AwsRegion = "ap-northeast-1"
+)
+
+const (
+	AppId    = "80fb90a6c28247689bf341c2e141b1e6" // PinpointのプロジェクトID
+	SenderId = "rescuenow"                        // 送信ID SMSの送信者名
+)
+
+// SNS
+func sendSns() {
+	log.Printf("sendSns start")
+	mySession := session.Must(session.NewSession())
+	svc := sns.New(mySession, aws.NewConfig().WithRegion(AwsRegion))
+
+	text := "Amazon SNS サンプルメッセージです。地震が発生しました。"
+
+	// サブスクリプションのプロトコルごとにメッセージを指定
+	messageJson := map[string]string{
+		"default": text,
+		"sqs":     "This is sample message for sqs." + text,
+		"sms":     "SMS エンドポイントのサンプルメッセージ" + text,
+		"email":   "E メールエンドポイントのサンプルメッセージ" + text,
+	}
+	// メッセージ構造体はJSON文字列にする
+	bytes, err := json.Marshal(messageJson)
+	if err != nil {
+		fmt.Println("JSON marshal Error: ", err)
+	}
+	message := string(bytes)
+
+	// inputSms := &sns.PublishInput{
+	// 	Message:     aws.String(message),
+	// 	PhoneNumber: aws.String("+818074910888"),
+	// }
+
+	pin := &sns.PublishInput{}
+	pin.SetMessage("SMS エンドポイントのサンプルメッセージ" + text)
+	pin.SetPhoneNumber("+818074910888")
+	outSms, err := svc.Publish(pin)
+	if err != nil {
+		fmt.Println("Publish Error: ", err)
+	}
+	log.Printf(outSms.GoString())
+
+	inputPublish := &sns.PublishInput{
+		Message:          aws.String(message),
+		MessageStructure: aws.String("json"), // MessageStructureにjsonを指定
+		TopicArn:         aws.String(TopicARN),
+	}
+
+	MessageId, err := svc.Publish(inputPublish)
+	if err != nil {
+		fmt.Println("Publish Error: ", err)
+	}
+
+	// fmt.Println(MessageId)
+	log.Printf(MessageId.GoString())
+
+}
+
+// Pinpoint
+func sendmessage() {
+	log.Printf("sendmessage start")
+	mySession := session.Must(session.NewSession())
+
+	text := "Pinpoint サンプルメッセージです。地震が発生しました。"
+
+	// サブスクリプションのプロトコルごとにメッセージを指定
+	messageJson := map[string]string{
+		"default": text,
+		"sqs":     "This is sample message for sqs." + text,
+		"sms":     "SMS エンドポイントのサンプルメッセージ" + text,
+		"email":   "E メールエンドポイントのサンプルメッセージ" + text,
+	}
+	// メッセージ構造体はJSON文字列にする
+	bytes, err := json.Marshal(messageJson)
+	if err != nil {
+		fmt.Println("JSON marshal Error: ", err)
+	}
+	message := string(bytes)
+
+	pp := pinpoint.New(mySession, aws.NewConfig().WithRegion(AwsRegion))
+
+	// 送信先電話番号
+	// phoneNum := "+818074910888"
+
+	// SMS送信
+	pIn := &pinpoint.SendMessagesInput{
+		ApplicationId: aws.String(AppId),
+		MessageRequest: &pinpoint.MessageRequest{
+			Addresses: map[string]*pinpoint.AddressConfiguration{
+				"+818074910888": &pinpoint.AddressConfiguration{
+					ChannelType: aws.String(pinpoint.ChannelTypeSms),
+				},
+			},
+			MessageConfiguration: &pinpoint.DirectMessageConfiguration{
+				SMSMessage: &pinpoint.SMSMessage{
+					Body:        aws.String(message),  // 本文
+					SenderId:    aws.String(SenderId), // 送信ID SMSの送信者名
+					MessageType: aws.String(pinpoint.MessageTypePromotional),
+				},
+			},
+		},
+	}
+
+	pOut, _ := pp.SendMessages(pIn)
+	log.Println(pOut.MessageResponse.Result)
+}
+
+// Vonage
+func sendvonage() {
+	number := "818074910888"
+	var API_KEY = "6b4727dd"
+	var API_SECRET = "0qtbugeJoLkSxKve"
+
+	value := url.Values{}
+	value.Set("from", "rescuenow")
+	value.Add("text", "サンプルメッセージ By Vonage API")
+	value.Add("to", number)
+	value.Add("api_key", API_KEY)
+	value.Add("api_secret", API_SECRET)
+	value.Add("type", "unicode")
+	resp, err := http.PostForm("https://rest.nexmo.com/sms/json", value)
+	if err != nil {
+		log.Fatal(err)
+	}
+	buffer := make([]byte, 1024)
+	respLen, _ := resp.Body.Read(buffer)
+	body := string(buffer[:respLen])
+	fmt.Println(body)
+	fmt.Println(resp.Status)
+	defer resp.Body.Close()
+}
+
+// Sendgrid
+func sendgridmail() {
+	from := mail.NewEmail("Example User", "test@example.com")
+	subject := "レスキューナウよりお知らせ Sendgrid"
+	to := mail.NewEmail("Example User", "katuyuki.toki@gmail.com")
+	plainTextContent := "サンプルテキストメッセージの送信"
+	htmlContent := "<strong>サンプルテキストメッセージの送信</strong>"
+	message := mail.NewSingleEmail(from, subject, to, plainTextContent, htmlContent)
+	client := sendgrid.NewSendClient(os.Getenv("SENDGRID_API_KEY"))
+	response, err := client.Send(message)
+	if err != nil {
+		log.Println(err)
+	} else {
+		fmt.Println(response.StatusCode)
+		fmt.Println(response.Body)
+		fmt.Println(response.Headers)
 	}
 }
